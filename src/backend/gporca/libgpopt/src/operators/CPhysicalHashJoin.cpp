@@ -1172,6 +1172,7 @@ CPhysicalHashJoin::CreateOptRequests(CMemoryPool *mp)
 	ULONG ulDistrReqs =
 		GPOPT_NON_HASH_DIST_REQUESTS + m_pdrgpdsRedistributeRequests->Size();
 	SetDistrRequests(ulDistrReqs);
+		SetPartPropagateRequests(2);
 
 	// With DP enabled, there are several (max 10 controlled by macro)
 	// alternatives generated for a join tree and during optimization of those
@@ -1194,17 +1195,7 @@ CPhysicalHashJoin::CreateOptRequests(CMemoryPool *mp)
 	// some cases, but can create better alternatives to DPE, so
 	// we also generate this additional request for expressions that originated
 	// from CXformExpandNAryJoinGreedy.
-	CPhysicalJoin *physical_join = dynamic_cast<CPhysicalJoin *>(this);
-	if ((GPOPT_FDISABLED_XFORM(CXform::ExfExpandNAryJoinDP) &&
-		 GPOPT_FDISABLED_XFORM(CXform::ExfExpandNAryJoinDPv2)) ||
-		physical_join->OriginXform() == CXform::ExfExpandNAryJoinGreedy)
-	{
-		SetPartPropagateRequests(2);
-	}
-	else
-	{
-		SetPartPropagateRequests(1);
-	}
+	SetPartPropagateRequests(2);
 }
 
 CExpression *

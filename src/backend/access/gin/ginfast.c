@@ -245,9 +245,10 @@ ginHeapTupleFastInsert(GinState *ginstate, GinTupleCollector *collector)
 	/*
 	 * An insertion to the pending list could logically belong anywhere in the
 	 * tree, so it conflicts with all serializable scans.  All scans acquire a
-	 * predicate lock on the metabuffer to represent that.
+	 * predicate lock on the metabuffer to represent that.  Therefore we'll
+	 * check for conflicts in, but not until we have the page locked and are
+	 * ready to modify the page.
 	 */
-	CheckForSerializableConflictIn(index, NULL, GIN_METAPAGE_BLKNO);
 
 	if (collector->sumsize + collector->ntuples * sizeof(ItemIdData) > GinListPageSize)
 	{
@@ -285,12 +286,13 @@ ginHeapTupleFastInsert(GinState *ginstate, GinTupleCollector *collector)
 		memset(&sublist, 0, sizeof(GinMetaPageData));
 		makeSublist(index, collector->tuples, collector->ntuples, &sublist);
 
-
 		/*
 		 * metapage was unlocked, see above
 		 */
 		LockBuffer(metabuffer, GIN_EXCLUSIVE);
 		metadata = GinPageGetMeta(metapage);
+
+		CheckForSerializableConflictIn(index, NULL, GIN_METAPAGE_BLKNO);
 
 		if (metadata->head == InvalidBlockNumber)
 		{
@@ -354,6 +356,8 @@ ginHeapTupleFastInsert(GinState *ginstate, GinTupleCollector *collector)
 		char	   *ptr;
 		char	   *collectordata;
 
+		CheckForSerializableConflictIn(index, NULL, GIN_METAPAGE_BLKNO);
+
 		buffer = ReadBuffer(index, metadata->tail);
 		LockBuffer(buffer, GIN_EXCLUSIVE);
 		page = BufferGetPage(buffer);
@@ -365,10 +369,10 @@ ginHeapTupleFastInsert(GinState *ginstate, GinTupleCollector *collector)
 
 		data.ntuples = collector->ntuples;
 
+		START_CRIT_SECTION();
+
 		if (needWal)
 			XLogBeginInsert();
-
-		START_CRIT_SECTION();
 
 		/*
 		 * Increase counter of heap tuples
